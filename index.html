@@ -1,0 +1,172 @@
+
+<!doctype html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"utf-8\" />
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+  <title>EMI Calculator (Flat-Rate)</title>
+  <link rel=\"manifest\" href=\"manifest.webmanifest\">
+  <meta name=\"theme-color\" content=\"#10B981\">
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --accent:#10B981; --danger:#ef4444; }
+    *{box-sizing:border-box} body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial,Noto Sans,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+    header{padding:16px;text-align:center} .container{max-width:720px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border-radius:16px;padding:16px;box-shadow:0 10px 20px rgba(0,0,0,.3)}
+    .grid{display:grid;gap:12px} .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+    input,select{width:100%;padding:12px;border-radius:12px;border:1px solid #1f2937;background:#0b1220;color:var(--text)}
+    .inline{display:flex;gap:8px;align-items:center}
+    .radio-group{display:flex;gap:12px} .radio{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;border:1px solid #1f2937;cursor:pointer}
+    .radio input{width:auto} .btn{background:var(--accent);color:#062e27;border:none;padding:12px 16px;border-radius:12px;font-weight:600;cursor:pointer}
+    .muted{color:var(--muted);font-size:12px} .result{background:#0b1220;border-radius:12px;padding:12px}
+    .result h3{margin:8px 0 12px} .row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+    .value{font-size:18px;font-weight:700} footer{text-align:center;padding:16px;color:var(--muted);font-size:12px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EMI Calculator — Flat-Rate</h1>
+    <p class=\"muted\">Processing charges are added to principal. Interest can be % per annum or ₹ per month.</p>
+  </header>
+  <div class=\"container\">
+    <div class=\"card\">
+      <div class=\"grid\">
+        <div>
+          <label for=\"loan\">Loan amount (₹)</label>
+          <input id=\"loan\" type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"0.01\" placeholder=\"e.g., 250000\" value=\"250000\" />
+        </div>
+        <div>
+          <label for=\"months\">Tenure (months)</label>
+          <input id=\"months\" type=\"number\" inputmode=\"numeric\" min=\"1\" step=\"1\" placeholder=\"e.g., 36\" value=\"36\" />
+        </div>
+        <div>
+          <label>Processing charges</label>
+          <div class=\"row\">
+            <select id=\"pcType\">
+              <option value=\"percent\" selected>Percentage (%)</option>
+              <option value=\"amount\">Fixed amount (₹)</option>
+            </select>
+            <input id=\"pcValue\" type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"0.01\" placeholder=\"e.g., 10\" value=\"10\" />
+          </div>
+          <div class=\"muted\" id=\"pcComputed\">Processing amount: —</div>
+        </div>
+        <div>
+          <label>Interest type</label>
+          <div class=\"radio-group\">
+            <label class=\"radio\"><input type=\"radio\" name=\"irType\" value=\"rupees\" checked> ₹ per month</label>
+            <label class=\"radio\"><input type=\"radio\" name=\"irType\" value=\"percent\"> % per annum</label>
+          </div>
+        </div>
+        <div id=\"irRupeesWrap\">
+          <label for=\"irRupees\">Interest (₹ per month)</label>
+          <input id=\"irRupees\" type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"0.01\" value=\"2\" />
+        </div>
+        <div id=\"irPercentWrap\" style=\"display:none;\">
+          <label for=\"irPercent\">Interest (% per annum)</label>
+          <input id=\"irPercent\" type=\"number\" inputmode=\"decimal\" min=\"0\" step=\"0.01\" value=\"10\" />
+        </div>
+      </div>
+      <div style=\"margin-top:16px;\" class=\"inline\">
+        <button class=\"btn\" id=\"calcBtn\">Calculate EMI</button>
+        <span class=\"muted\">Flat-rate method: EMI = (Principal + Total Interest) / Months</span>
+      </div>
+      <div class=\"result\" style=\"margin-top:16px;\">
+        <h3>Results</h3>
+        <div class=\"row-3\">
+          <div>
+            <div class=\"muted\">Processing amount</div>
+            <div class=\"value\" id=\"outPc\">—</div>
+          </div>
+          <div>
+            <div class=\"muted\">Adjusted principal</div>
+            <div class=\"value\" id=\"outPrincipal\">—</div>
+          </div>
+          <div>
+            <div class=\"muted\">Total interest</div>
+            <div class=\"value\" id=\"outInterest\">—</div>
+          </div>
+        </div>
+        <div class=\"row\" style=\"margin-top:12px;\">
+          <div>
+            <div class=\"muted\">Total payable</div>
+            <div class=\"value\" id=\"outTotal\">—</div>
+          </div>
+          <div>
+            <div class=\"muted\">Monthly EMI</div>
+            <div class=\"value\" id=\"outEmi\">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class=\"muted\" style=\"margin-top:12px;\">Assumptions: When interest type is ₹ per month, we treat it as a fixed amount added each month (independent of principal). For % per annum, we use flat-rate interest on adjusted principal.</p>
+  </div>
+  <footer>
+    <small>© 2026 EMI Calculator — Works offline after first load. Add to Home Screen to use as an app.</small>
+  </footer>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
+      });
+    }
+    const fmtINR = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
+    const elLoan = document.getElementById('loan');
+    const elMonths = document.getElementById('months');
+    const elPcType = document.getElementById('pcType');
+    const elPcValue = document.getElementById('pcValue');
+    const elPcComputed = document.getElementById('pcComputed');
+    const elIrRupeesWrap = document.getElementById('irRupeesWrap');
+    const elIrPercentWrap = document.getElementById('irPercentWrap');
+    const elIrRupees = document.getElementById('irRupees');
+    const elIrPercent = document.getElementById('irPercent');
+    const outPc = document.getElementById('outPc');
+    const outPrincipal = document.getElementById('outPrincipal');
+    const outInterest = document.getElementById('outInterest');
+    const outTotal = document.getElementById('outTotal');
+    const outEmi = document.getElementById('outEmi');
+    function clampNumber(v, def=0) {
+      v = Number(v);
+      if (!isFinite(v) || v < 0) return def;
+      return v;
+    }
+    function computeProcessingAmount(loan, type, value) {
+      if (type === 'percent') { return loan * (value / 100); } else { return value; }
+    }
+    function compute() {
+      const loan = clampNumber(elLoan.value, 0);
+      const months = Math.max(1, Math.floor(clampNumber(elMonths.value, 1)));
+      const pcType = elPcType.value;
+      const pcValue = clampNumber(elPcValue.value, 0);
+      const pcAmount = computeProcessingAmount(loan, pcType, pcValue);
+      elPcComputed.textContent = `Processing amount: ${fmtINR.format(pcAmount)}`;
+      const principal = loan + pcAmount;
+      const irType = document.querySelector('input[name=\"irType\"]:checked').value;
+      let totalInterest = 0;
+      if (irType === 'percent') {
+        const rate = clampNumber(elIrPercent.value, 0);
+        totalInterest = principal * (rate / 100) * (months / 12);
+      } else {
+        const rupeesPerMonth = clampNumber(elIrRupees.value, 0);
+        totalInterest = rupeesPerMonth * months;
+      }
+      const totalPayable = principal + totalInterest;
+      const emi = totalPayable / months;
+      outPc.textContent = fmtINR.format(pcAmount);
+      outPrincipal.textContent = fmtINR.format(principal);
+      outInterest.textContent = fmtINR.format(totalInterest);
+      outTotal.textContent = fmtINR.format(totalPayable);
+      outEmi.textContent = fmtINR.format(emi);
+    }
+    function toggleInterestInputs() {
+      const irType = document.querySelector('input[name=\"irType\"]:checked').value;
+      if (irType === 'percent') { elIrPercentWrap.style.display = ''; elIrRupeesWrap.style.display = 'none'; }
+      else { elIrPercentWrap.style.display = 'none'; elIrRupeesWrap.style.display = ''; }
+    }
+    document.getElementById('calcBtn').addEventListener('click', compute);
+    document.querySelectorAll('input[name=\"irType\"]').forEach(r => r.addEventListener('change', () => { toggleInterestInputs(); compute(); }));
+    [elLoan, elMonths, elPcType, elPcValue, elIrPercent, elIrRupees].forEach(el => el.addEventListener('input', compute));
+    toggleInterestInputs(); compute();
+  </script>
+</body>
+</html>
